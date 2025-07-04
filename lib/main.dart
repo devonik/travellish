@@ -262,10 +262,6 @@ class _FlightTicketPageState extends State<FlightTicketPage> {
                           "${ticket.originText} - ${ticket.destinationText}",
                         ),
                       ),
-                      Center(child: IconButton(onPressed: () => {
-          print("pressed icon"),
-            OpenFile.open(ticket.path, type: 'application/pdf')
-        }, icon: Icon(Icons.picture_as_pdf)))
                     ],
                   ),
               ],
@@ -361,7 +357,7 @@ class _CardWidget extends StatelessWidget {
       } else if (ticketFileMimeStr.endsWith('pdf')) {
         fileWidget = Center(child: IconButton(onPressed: () => {
           print("pressed icon"),
-            Navigator.of(context).push(_createRoute(context, ticket.path))
+            OpenFile.open(ticket.path, type: 'application/pdf')
         }, icon: Icon(Icons.picture_as_pdf)));
         
       }
