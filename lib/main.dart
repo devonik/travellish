@@ -1,19 +1,24 @@
 import 'package:flutter/material.dart';
 import 'dart:math';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:mime/mime.dart';
 import 'dart:io';
+import 'package:open_file/open_file.dart';
 
 class FlightTicket {
   bool displayFront;
   String originText;
   String destinationText;
   String path;
+  String extension;
 
   FlightTicket({
     this.displayFront = true,
     required this.originText,
     required this.destinationText,
     required this.path,
+    required this.extension,
   });
 
   void toggleDisplay() {
@@ -84,16 +89,15 @@ class FlightTicketPage extends StatefulWidget {
   @override
   State<FlightTicketPage> createState() => _FlightTicketPageState();
 }
-
 class _FlightTicketPageState extends State<FlightTicketPage> {
   List<FlightTicket> tickets = [
     FlightTicket(
       originText: 'Germany (FRA)',
       destinationText: 'France (ORY)',
       path: 'assets/ticket1.jpg',
+      extension: 'jpg',
     ),
   ];
-
   dynamic _pickImageError;
   String? _retrieveDataError;
 
@@ -116,21 +120,20 @@ class _FlightTicketPageState extends State<FlightTicketPage> {
         String destinationText,
       ) async {
         try {
-          final XFile? pickedFile = await _picker.pickImage(
-            source: source,
-            maxWidth: maxWidth,
-            maxHeight: maxHeight,
-            imageQuality: quality,
-          );
-          setState(() {
-            tickets.add(
-              FlightTicket(
-                originText: originText,
-                destinationText: destinationText,
-                path: pickedFile?.path ?? '',
-              ),
-            );
-          });
+          FilePickerResult? result = await FilePicker.platform.pickFiles();
+
+          if (result != null) {
+            setState(() {
+              tickets.add(
+                FlightTicket(
+                  originText: originText,
+                  destinationText: destinationText,
+                  path: result.files.single.path!,
+                  extension: result.files.single.extension!,
+                ),
+              );
+            });
+          }
         } catch (e) {
           setState(() {
             _pickImageError = e;
@@ -140,8 +143,8 @@ class _FlightTicketPageState extends State<FlightTicketPage> {
     }
   }
 
-    bool isOriginTextEmpty = false;
-    bool isDestinationTextEmpty = false;
+  bool isOriginTextEmpty = false;
+  bool isDestinationTextEmpty = false;
   Future<void> _displayPickImageDialog(
     BuildContext context,
     OnPickImageCallback onPick,
@@ -160,14 +163,18 @@ class _FlightTicketPageState extends State<FlightTicketPage> {
                     controller: originTextController,
                     decoration: InputDecoration(
                       hintText: 'Origin e.g. "Germany (FRA)"',
-                      errorText: isOriginTextEmpty ? "Value Can't Be Empty" : null,
+                      errorText: isOriginTextEmpty
+                          ? "Value Can't Be Empty"
+                          : null,
                     ),
                   ),
                   TextField(
                     controller: destinationTextController,
                     decoration: InputDecoration(
                       hintText: 'Destination e.g. "France (ORY)"',
-                      errorText: isDestinationTextEmpty ? "Value Can't Be Empty" : null,
+                      errorText: isDestinationTextEmpty
+                          ? "Value Can't Be Empty"
+                          : null,
                     ),
                   ),
                 ],
@@ -182,13 +189,14 @@ class _FlightTicketPageState extends State<FlightTicketPage> {
                 TextButton(
                   child: const Text('PICK'),
                   onPressed: () {
-                      setState(() {
-                        isOriginTextEmpty = originTextController.text.isEmpty;
-                        isDestinationTextEmpty = destinationTextController.text.isEmpty;
-                      });
-                      if(isOriginTextEmpty || isDestinationTextEmpty) {
-                        return;
-                      }
+                    setState(() {
+                      isOriginTextEmpty = originTextController.text.isEmpty;
+                      isDestinationTextEmpty =
+                          destinationTextController.text.isEmpty;
+                    });
+                    if (isOriginTextEmpty || isDestinationTextEmpty) {
+                      return;
+                    }
                     onPick(
                       250,
                       250,
@@ -197,115 +205,21 @@ class _FlightTicketPageState extends State<FlightTicketPage> {
                       originTextController.text,
                       destinationTextController.text,
                     );
+
                     Navigator.of(context).pop();
                   },
                 ),
               ],
             );
-          }
+          },
         );
       },
     );
   }
 
-  Future<void> retrieveLostData() async {
-    final LostDataResponse response = await _picker.retrieveLostData();
-    if (response.isEmpty) {
-      return;
-    }
-    if (response.file != null) {
-      setState(() {
-        if (response.files == null) {
-          tickets.add(
-            FlightTicket(
-              originText: 'Unkown',
-              destinationText: 'Unkown',
-              path: response.file?.path ?? '',
-            ),
-          );
-        } else {
-          for (var file in response.files!)
-            tickets.add(
-              FlightTicket(
-                originText: 'Unkown',
-                destinationText: 'Unkown',
-                path: file.path,
-              ),
-            );
-        }
-      });
-    } else {
-      _retrieveDataError = response.exception!.code;
-    }
-  }
+  
 
-  Text? _getRetrieveErrorWidget() {
-    if (_retrieveDataError != null) {
-      final Text result = Text(_retrieveDataError!);
-      _retrieveDataError = null;
-      return result;
-    }
-    return null;
-  }
-
-  Widget _cardWidget(FlightTicket ticket) {
-    final Text? retrieveError = _getRetrieveErrorWidget();
-    if (retrieveError != null) {
-      return retrieveError;
-    }
-    if (tickets.isNotEmpty) {
-      return GestureDetector(
-        onTap: () => setState(() {
-          ticket.toggleDisplay();
-          print('changed displayFront to ${ticket.displayFront}');
-        }),
-        child: AnimatedSwitcher(
-          duration: Duration(milliseconds: 800),
-          transitionBuilder: (widget, animation) => __transitionBuilder(widget, animation, ticket.displayFront),
-          layoutBuilder: (widget, list) => Stack(children: [widget!, ...list]),
-          switchInCurve: Curves.easeInBack,
-          switchOutCurve: Curves.easeInBack.flipped,
-          child: Card(
-            key: ValueKey(ticket.displayFront),
-                  clipBehavior: Clip.antiAliasWithSaveLayer,
-                  color: ticket.displayFront ? Colors.blue : Colors.green[100],
-                  child: ticket.displayFront
-                      ? Center(child: Text('Front of Ticket'))
-                      : FittedBox(
-                            child: Image.file(
-                              File(ticket.path),
-                              errorBuilder:
-                                  (
-                                    BuildContext context,
-                                    Object error,
-                                    StackTrace? stackTrace,
-                                  ) {
-                                    return const Center(
-                                      child: Text('This image type is not supported'),
-                                    );
-                                  },
-                            ),
-                            fit: BoxFit.fill,
-                          ),
-                        
-                
-            
-          ),
-        ),
-      );
-    } else if (_pickImageError != null) {
-      return Text(
-        'Pick image error: $_pickImageError',
-        textAlign: TextAlign.center,
-      );
-    } else {
-      return const Text(
-        'You have not yet picked an image.',
-        textAlign: TextAlign.center,
-      );
-    }
-  }
-
+ 
   @override
   Widget build(BuildContext context) {
     // This method is rerun every time setState is called, for instance as done
@@ -334,12 +248,26 @@ class _FlightTicketPageState extends State<FlightTicketPage> {
               mainAxisSpacing: 10,
               crossAxisCount: 2,
               children: <Widget>[
-                for (var ticket in tickets) Column(
-                  children: [
-                    Flexible(flex: 2,child: _cardWidget(ticket)) ,
-                    Flexible(flex: 1, child: Text('test'))       
-                  ],
-                ),
+                for (var ticket in tickets)
+                  Column(
+                    children: [
+                      if(_retrieveDataError != null) Text(_retrieveDataError!)
+                      else 
+                      Flexible(flex: 2, child: _CardWidget(ticket, () => setState(() {
+                        ticket.toggleDisplay();
+                      }))),
+                      Flexible(
+                        flex: 1,
+                        child: Text(
+                          "${ticket.originText} - ${ticket.destinationText}",
+                        ),
+                      ),
+                      Center(child: IconButton(onPressed: () => {
+          print("pressed icon"),
+            OpenFile.open(ticket.path, type: 'application/pdf')
+        }, icon: Icon(Icons.picture_as_pdf)))
+                    ],
+                  ),
               ],
             ),
           ),
@@ -356,7 +284,7 @@ class _FlightTicketPageState extends State<FlightTicketPage> {
               },
               heroTag: 'image0',
               tooltip: 'Pick Image from gallery',
-              child: const Icon(Icons.photo),
+              child: const Icon(Icons.add_a_photo),
             ),
           ),
           if (_picker.supportsImageSource(ImageSource.camera))
@@ -368,7 +296,7 @@ class _FlightTicketPageState extends State<FlightTicketPage> {
                 },
                 heroTag: 'image2',
                 tooltip: 'Take a Photo',
-                child: const Icon(Icons.camera_alt),
+                child: const Icon(Icons.camera_enhance),
               ),
             ),
         ],
@@ -393,9 +321,209 @@ Widget __transitionBuilder(
       final value = isUnder ? min(rotateAnim.value, pi / 2) : rotateAnim.value;
       return Transform(
         transform: (Matrix4.rotationY(value)..setEntry(3, 0, tilt)),
-        child: widget,
         alignment: Alignment.center,
+        child: widget,
       );
     },
   );
+}
+
+class _CardWidget extends StatelessWidget {
+  final FlightTicket ticket;
+  Function() toggleTicketDisplay;
+
+  _CardWidget(this.ticket,  this.toggleTicketDisplay);
+
+@override 
+    Widget build(BuildContext context) {
+
+  
+    String? ticketFileMimeStr = lookupMimeType(ticket.path);
+    print("ticket file mime type: ${ticketFileMimeStr}");
+    Widget fileWidget = Center(
+      child: Text('No preview available. Should open file via external tool'),
+    );
+    if (ticketFileMimeStr != null) {
+      if (ticketFileMimeStr.startsWith('image')) {
+        bool isTicketFileImage = ticketFileMimeStr.startsWith('image');
+        fileWidget = FittedBox(
+          fit: BoxFit.fill,
+          child: Image.file(
+            File(ticket.path),
+            errorBuilder:
+                (BuildContext context, Object error, StackTrace? stackTrace) {
+                  return const Center(
+                    child: Text('This image type is not supported'),
+                  );
+                },
+          ),
+        );
+      } else if (ticketFileMimeStr.endsWith('pdf')) {
+        fileWidget = Center(child: IconButton(onPressed: () => {
+          print("pressed icon"),
+            Navigator.of(context).push(_createRoute(context, ticket.path))
+        }, icon: Icon(Icons.picture_as_pdf)));
+        
+      }
+    }
+    
+    return GestureDetector(
+      onTap: () => toggleTicketDisplay(),
+      child: AnimatedSwitcher(
+        duration: Duration(milliseconds: 800),
+        transitionBuilder: (widget, animation) =>
+            __transitionBuilder(widget, animation, ticket.displayFront),
+        layoutBuilder: (widget, list) => Stack(children: [widget!, ...list]),
+        switchInCurve: Curves.easeInBack,
+        switchOutCurve: Curves.easeInBack.flipped,
+        child: Card(
+          key: ValueKey(ticket.displayFront),
+          clipBehavior: Clip.antiAliasWithSaveLayer,
+          color: ticket.displayFront ? Colors.blue : Colors.green[100],
+          child: ticket.displayFront
+              ? Center(child: Text('Front of Ticket'))
+              : fileWidget,
+        ),
+      ),
+    );
+    }
+}
+
+
+
+
+//TODO focus image with
+Route _createRoute(BuildContext parentContext, String path) {
+  return PageRouteBuilder<void>(
+    pageBuilder: (context, animation, secondaryAnimation) {
+      return PDFScreen(path: path);
+    },
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      var rectAnimation = _createTween(
+        parentContext,
+      ).chain(CurveTween(curve: Curves.ease)).animate(animation);
+
+      return Stack(
+        children: [PositionedTransition(rect: rectAnimation, child: child)],
+      );
+    },
+  );
+}
+Tween<RelativeRect> _createTween(BuildContext context) {
+  var windowSize = MediaQuery.of(context).size;
+  var box = context.findRenderObject() as RenderBox;
+  var rect = box.localToGlobal(Offset.zero) & box.size;
+  var relativeRect = RelativeRect.fromSize(rect, windowSize);
+
+  return RelativeRectTween(begin: relativeRect, end: RelativeRect.fill);
+}
+class _SecondPage extends StatelessWidget {
+  final String imageAssetName;
+
+  const _SecondPage(this.imageAssetName);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Center(
+        child: Material(
+          child: InkWell(
+            onTap: () => Navigator.of(context).pop(),
+            child: AspectRatio(
+              aspectRatio: 1,
+              child: Image.asset(imageAssetName, fit: BoxFit.cover),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+  final Completer<PDFViewController> _controller =
+      Completer<PDFViewController>();
+  int? pages = 0;
+  int? currentPage = 0;
+  bool isReady = false;
+  String errorMessage = '';
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text("Document"),
+        actions: <Widget>[
+          IconButton(icon: Icon(Icons.share), onPressed: () {}),
+        ],
+      ),
+      body: Stack(
+        children: <Widget>[
+          PDFView(
+            filePath: widget.path,
+            enableSwipe: true,
+            swipeHorizontal: true,
+            autoSpacing: false,
+            pageFling: true,
+            pageSnap: true,
+            defaultPage: currentPage!,
+            fitPolicy: FitPolicy.BOTH,
+            preventLinkNavigation:
+                false, // if set to true the link is handled in flutter
+            backgroundColor: Color(0xFFFEF7FF),
+            onRender: (_pages) {
+              setState(() {
+                pages = _pages;
+                isReady = true;
+              });
+            },
+            onError: (error) {
+              setState(() {
+                errorMessage = error.toString();
+              });
+              print(error.toString());
+            },
+            onPageError: (page, error) {
+              setState(() {
+                errorMessage = '$page: ${error.toString()}';
+              });
+              print('$page: ${error.toString()}');
+            },
+            onViewCreated: (PDFViewController pdfViewController) {
+              _controller.complete(pdfViewController);
+            },
+            onLinkHandler: (String? uri) {
+              print('goto uri: $uri');
+            },
+            onPageChanged: (int? page, int? total) {
+              print('page change: ${page ?? 0 + 1}/$total');
+              setState(() {
+                currentPage = page;
+              });
+            },
+          ),
+          errorMessage.isEmpty
+              ? !isReady
+                    ? Center(child: CircularProgressIndicator())
+                    : Container()
+              : Center(child: Text(errorMessage)),
+        ],
+      ),
+      floatingActionButton: FutureBuilder<PDFViewController>(
+        future: _controller.future,
+        builder: (context, AsyncSnapshot<PDFViewController> snapshot) {
+          if (snapshot.hasData) {
+            return FloatingActionButton.extended(
+              label: Text("Go to ${pages! ~/ 2}"),
+              onPressed: () async {
+                await snapshot.data!.setPage(pages! ~/ 2);
+              },
+            );
+          }
+
+          return Container();
+        },
+      ),
+    );
+  }
 }
