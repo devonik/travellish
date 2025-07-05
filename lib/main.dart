@@ -302,9 +302,9 @@ Widget __transitionBuilder(
 
 class _CardWidget extends StatelessWidget {
   final FlightTicket ticket;
-  Function() toggleTicketDisplay;
+  final Function toggleTicketDisplay;
 
-  _CardWidget(this.ticket,  this.toggleTicketDisplay);
+  const _CardWidget(this.ticket,  this.toggleTicketDisplay);
 
 @override 
     Widget build(BuildContext context) {
