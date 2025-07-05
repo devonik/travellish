@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'dart:math';
-import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:mime/mime.dart';
 import 'dart:io';
@@ -11,14 +10,12 @@ class FlightTicket {
   String originText;
   String destinationText;
   String path;
-  String extension;
 
   FlightTicket({
     this.displayFront = true,
     required this.originText,
     required this.destinationText,
     required this.path,
-    required this.extension,
   });
 
   void toggleDisplay() {
@@ -94,20 +91,17 @@ class _FlightTicketPageState extends State<FlightTicketPage> {
     FlightTicket(
       originText: 'Germany (FRA)',
       destinationText: 'France (ORY)',
-      path: 'assets/ticket1.jpg',
-      extension: 'jpg',
+      path: 'assets/20240425_185330.jpg',
     ),
   ];
-  dynamic _pickImageError;
   String? _retrieveDataError;
 
-  final ImagePicker _picker = ImagePicker();
   final TextEditingController originTextController = TextEditingController();
   final TextEditingController destinationTextController =
       TextEditingController();
 
   Future<void> _onImageButtonPressed(
-    ImageSource source, {
+     {
     required BuildContext context,
   }) async {
     if (context.mounted) {
@@ -119,7 +113,6 @@ class _FlightTicketPageState extends State<FlightTicketPage> {
         String originText,
         String destinationText,
       ) async {
-        try {
           FilePickerResult? result = await FilePicker.platform.pickFiles();
 
           if (result != null) {
@@ -129,16 +122,11 @@ class _FlightTicketPageState extends State<FlightTicketPage> {
                   originText: originText,
                   destinationText: destinationText,
                   path: result.files.single.path!,
-                  extension: result.files.single.extension!,
                 ),
               );
             });
           }
-        } catch (e) {
-          setState(() {
-            _pickImageError = e;
-          });
-        }
+        
       });
     }
   }
@@ -254,7 +242,7 @@ class _FlightTicketPageState extends State<FlightTicketPage> {
                       if(_retrieveDataError != null) Text(_retrieveDataError!)
                       else 
                       Flexible(flex: 2, child: _CardWidget(ticket, () => setState(() {
-                        ticket.toggleDisplay();
+                        ticket.displayFront = false;
                       }))),
                       Flexible(
                         flex: 1,
@@ -276,25 +264,13 @@ class _FlightTicketPageState extends State<FlightTicketPage> {
             label: 'image_picker_example_from_gallery',
             child: FloatingActionButton(
               onPressed: () {
-                _onImageButtonPressed(ImageSource.gallery, context: context);
+                _onImageButtonPressed(context: context);
               },
               heroTag: 'image0',
               tooltip: 'Pick Image from gallery',
               child: const Icon(Icons.add_a_photo),
             ),
           ),
-          if (_picker.supportsImageSource(ImageSource.camera))
-            Padding(
-              padding: const EdgeInsets.only(top: 16.0),
-              child: FloatingActionButton(
-                onPressed: () {
-                  _onImageButtonPressed(ImageSource.camera, context: context);
-                },
-                heroTag: 'image2',
-                tooltip: 'Take a Photo',
-                child: const Icon(Icons.camera_enhance),
-              ),
-            ),
         ],
       ),
     );
@@ -341,24 +317,21 @@ class _CardWidget extends StatelessWidget {
     );
     if (ticketFileMimeStr != null) {
       if (ticketFileMimeStr.startsWith('image')) {
-        bool isTicketFileImage = ticketFileMimeStr.startsWith('image');
         fileWidget = FittedBox(
           fit: BoxFit.fill,
-          child: Image.file(
-            File(ticket.path),
-            errorBuilder:
-                (BuildContext context, Object error, StackTrace? stackTrace) {
-                  return const Center(
-                    child: Text('This image type is not supported'),
-                  );
-                },
-          ),
+          child: InkWell(
+          onTap: () {
+            var nav = Navigator.of(context);
+            nav.push<void>(_createRouteFocusedImage(context, ticket.path));
+          },
+          child: Image.asset(ticket.path, fit: BoxFit.cover),
+        ),
         );
       } else if (ticketFileMimeStr.endsWith('pdf')) {
-        fileWidget = Center(child: IconButton(onPressed: () => {
-          print("pressed icon"),
-            OpenFile.open(ticket.path, type: 'application/pdf')
-        }, icon: Icon(Icons.picture_as_pdf)));
+        fileWidget = InkWell(
+          onTap: () => OpenFile.open(ticket.path, type: 'application/pdf'),
+          child: Center(child: Icon(Icons.picture_as_pdf)),
+        );
         
       }
     }
@@ -389,10 +362,10 @@ class _CardWidget extends StatelessWidget {
 
 
 //TODO focus image with
-Route _createRoute(BuildContext parentContext, String path) {
+Route _createRouteFocusedImage(BuildContext parentContext, String path) {
   return PageRouteBuilder<void>(
     pageBuilder: (context, animation, secondaryAnimation) {
-      return PDFScreen(path: path);
+      return _FocusedImageWidget(path);
     },
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
       var rectAnimation = _createTween(
@@ -413,10 +386,10 @@ Tween<RelativeRect> _createTween(BuildContext context) {
 
   return RelativeRectTween(begin: relativeRect, end: RelativeRect.fill);
 }
-class _SecondPage extends StatelessWidget {
-  final String imageAssetName;
+class _FocusedImageWidget extends StatelessWidget {
+  final String path;
 
-  const _SecondPage(this.imageAssetName);
+  const _FocusedImageWidget(this.path);
 
   @override
   Widget build(BuildContext context) {
@@ -428,7 +401,7 @@ class _SecondPage extends StatelessWidget {
             onTap: () => Navigator.of(context).pop(),
             child: AspectRatio(
               aspectRatio: 1,
-              child: Image.asset(imageAssetName, fit: BoxFit.cover),
+              child: Image.asset(path)//Image.file(File(path), fit: BoxFit.cover),
             ),
           ),
         ),
@@ -437,89 +410,4 @@ class _SecondPage extends StatelessWidget {
   }
 }
 
-  final Completer<PDFViewController> _controller =
-      Completer<PDFViewController>();
-  int? pages = 0;
-  int? currentPage = 0;
-  bool isReady = false;
-  String errorMessage = '';
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text("Document"),
-        actions: <Widget>[
-          IconButton(icon: Icon(Icons.share), onPressed: () {}),
-        ],
-      ),
-      body: Stack(
-        children: <Widget>[
-          PDFView(
-            filePath: widget.path,
-            enableSwipe: true,
-            swipeHorizontal: true,
-            autoSpacing: false,
-            pageFling: true,
-            pageSnap: true,
-            defaultPage: currentPage!,
-            fitPolicy: FitPolicy.BOTH,
-            preventLinkNavigation:
-                false, // if set to true the link is handled in flutter
-            backgroundColor: Color(0xFFFEF7FF),
-            onRender: (_pages) {
-              setState(() {
-                pages = _pages;
-                isReady = true;
-              });
-            },
-            onError: (error) {
-              setState(() {
-                errorMessage = error.toString();
-              });
-              print(error.toString());
-            },
-            onPageError: (page, error) {
-              setState(() {
-                errorMessage = '$page: ${error.toString()}';
-              });
-              print('$page: ${error.toString()}');
-            },
-            onViewCreated: (PDFViewController pdfViewController) {
-              _controller.complete(pdfViewController);
-            },
-            onLinkHandler: (String? uri) {
-              print('goto uri: $uri');
-            },
-            onPageChanged: (int? page, int? total) {
-              print('page change: ${page ?? 0 + 1}/$total');
-              setState(() {
-                currentPage = page;
-              });
-            },
-          ),
-          errorMessage.isEmpty
-              ? !isReady
-                    ? Center(child: CircularProgressIndicator())
-                    : Container()
-              : Center(child: Text(errorMessage)),
-        ],
-      ),
-      floatingActionButton: FutureBuilder<PDFViewController>(
-        future: _controller.future,
-        builder: (context, AsyncSnapshot<PDFViewController> snapshot) {
-          if (snapshot.hasData) {
-            return FloatingActionButton.extended(
-              label: Text("Go to ${pages! ~/ 2}"),
-              onPressed: () async {
-                await snapshot.data!.setPage(pages! ~/ 2);
-              },
-            );
-          }
-
-          return Container();
-        },
-      ),
-    );
-  }
-}
+  
